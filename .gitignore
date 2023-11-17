@@ -3,3 +3,4 @@ __pycache__
 combined_modular_repr_cache
 modular_repr_cache
 cached_reprs
+all_ligands.pickle

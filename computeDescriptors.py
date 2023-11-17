@@ -47,7 +47,7 @@ class dataBlocks(Enum):
     
     MACCS = 0
     rdkitFP = auto()
-    minFeatFP = auto()
+    minFeatFP = auto() # causes triangle inequality violations and hence unequal number of features for some entries in the FreeSolv set
     MorganFP = auto()
     
     Descriptors = auto()
@@ -81,7 +81,7 @@ class CustomMolModularDataset(Dataset):
                  representation_flags=[1]*(len(dataBlocks)-1), molecular_db_file=None,
                  out_folder=os.path.split(os.path.realpath(__file__))[0], datafolder=os.path.split(os.path.realpath(__file__))[0],
                  normalize_x=False, X_filter=None, verbose=False,
-                 cachefolder=None, use_cache=True, use_hdf5_cache=False, use_combined_cache=True,
+                 cachefolder=None, use_cache=False, use_hdf5_cache=False, use_combined_cache=True,
                  internal_cache_maxMem_MB=512):
         
         self.representation_flags=representation_flags
@@ -100,11 +100,16 @@ class CustomMolModularDataset(Dataset):
         
         self._internal_cache_maxMem=internal_cache_maxMem_MB*1024*1024 # 512 MB by default
         
-        if(X_filter):
-            if(not os.path.exists(X_filter)):
+        if(X_filter is not None):
+            if type(X_filter) is np.ndarray:
+                if(X_filter.ndim!=1):
+                    raise ValueError("X_filter should a 1D array or a filename of a pickled 1D array.")
+                self.X_filter=X_filter
+            elif(not os.path.exists(X_filter)):
                 raise(Exception(f"No such file: {X_filter}"))
-            with open(X_filter, 'rb') as f:
-                self.X_filter=pickle.load(f)
+            else:
+                with open(X_filter, 'rb') as f:
+                    self.X_filter=pickle.load(f)
         self.ligs=ligs
         if(self.representation_flags[int(dataBlocks.minFeatFP)]):
             fdefName = self.out_folder+'/MinimalFeatures.fdef'
@@ -248,7 +253,7 @@ class CustomMolModularDataset(Dataset):
                 X = self.transform(idx).astype(np.float32)
                 Y = np.array([float(lig.GetProp('dG')) if lig.HasProp('dG') else np.nan]) # kcal/mol
                 #save cache
-                if(self.use_cache and self.use_combined_cache):
+                if(self.use_combined_cache):
                     with open(cache_fn, 'wb') as f:
                         pickle.dump((X, Y), f)
             #if(self.X_filter):
@@ -295,13 +300,13 @@ class CustomMolModularDataset(Dataset):
             return(rdkitFingerprint_arr)
         
         elif(blockID==dataBlocks.minFeatFP):
-            Chem.GetSymmSSSR(lig)
-            minFeatFingerprint_txt=cDataStructs.BitVectToText(Generate.Gen2DFingerprint(lig, self.sigFactory))
-            minFeatFingerprint_arr=np.zeros(len(minFeatFingerprint_txt), dtype=np.uint8)
-            for j in range(len(minFeatFingerprint_txt)):
-                if(minFeatFingerprint_txt[j]=="1"):
-                    minFeatFingerprint_arr[j]=1;
-            return(minFeatFingerprint_arr)
+           Chem.GetSymmSSSR(lig)
+           minFeatFingerprint_txt=cDataStructs.BitVectToText(Generate.Gen2DFingerprint(lig, self.sigFactory))
+           minFeatFingerprint_arr=np.zeros(len(minFeatFingerprint_txt), dtype=np.uint8)
+           for j in range(len(minFeatFingerprint_txt)):
+               if(minFeatFingerprint_txt[j]=="1"):
+                   minFeatFingerprint_arr[j]=1;
+           return(minFeatFingerprint_arr)
     
         elif(blockID==dataBlocks.Descriptors):
             nms=[x[0] for x in Descriptors._descList]
