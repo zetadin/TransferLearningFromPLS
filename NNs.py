@@ -60,7 +60,7 @@ class Net(nn.Module):
                  activation="relu", drop_p=np.array([0,0]), #regmet=Reg_method.no,
                  lr_decay=0, weights_distrib_func=None,
                  high_binder_cutoff=0, weight_decay=0, noise=0,
-                 shiftY=False):
+                 shiftY=False, cap_output=None):
         super(Net, self).__init__()
         self.device = torch.device("cpu") #assume initial allocation on cpu
         self.nhl=nhl
@@ -75,6 +75,9 @@ class Net(nn.Module):
         self.high_binder_cutoff=high_binder_cutoff
         self.noise=noise
         self.shiftY=shiftY
+        self.cap_output = cap_output
+        if(self.cap_output is not None):
+            self.cap_output=torch.Tensor([abs(self.cap_output)])
         self.use_dropout=False
         if(np.any(drop_p>0)):
             self.use_dropout=True
@@ -176,6 +179,8 @@ class Net(nn.Module):
                 #x+=self.high_binder_cutoff
                 x*=1.535
                 x+=-9.512
+        if(self.cap_output is not None): # prevent loss from overflowing to inf values
+            x = torch.min(torch.max(x, -self.cap_output), self.cap_output)
         return x
 
     def feed_training_batch(self, batch_X, batch_Y):
