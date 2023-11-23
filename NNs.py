@@ -54,10 +54,28 @@ from enum import Enum
 
     #def __int__(self):
         #return self.value
+        
+def parse_activation(act_func_name):
+    if(act_func_name=="relu"):
+        return(F.relu)
+    elif(act_func_name=="tanh"):
+        return(torch.nn.Tanh())
+    elif(act_func_name=="celu"):
+        return(F.celu)
+    elif(act_func_name=="gelu"):
+        return(F.gelu)
+    elif(act_func_name=="sigmoid"):
+        return(torch.sigmoid)
+    elif(act_func_name=="gaussian"):
+        return(lambda x: torch.exp(torch.neg(x**2)))
+    
+    else:
+        raise(NotImplementedError(f"{act_func_name} activation function is not implemented."))
 
 class Net(nn.Module):
     def __init__(self, inp_width, hl_w=15, nhl=2, learning_rate=1e-3,
-                 activation="relu", drop_p=np.array([0,0]), #regmet=Reg_method.no,
+                 activation="relu", last_activation="relu",
+                 drop_p=np.array([0,0]), #regmet=Reg_method.no,
                  lr_decay=0, weights_distrib_func=None,
                  high_binder_cutoff=0, weight_decay=0, noise=0,
                  shiftY=False, cap_output=None):
@@ -86,16 +104,9 @@ class Net(nn.Module):
         self.init_layers()
 
         self.act_func_name=activation
-        if(self.act_func_name=="relu"):
-            self.act_func=F.relu
-        elif(self.act_func_name=="tanh"):
-            self.act_func=torch.nn.Tanh()
-        elif(self.act_func_name=="celu"):
-            self.act_func=F.celu
-        elif(self.act_func_name=="gelu"):
-            self.act_func=F.gelu
-        elif(self.act_func_name=="gaussian"):
-            self.act_func=lambda x: torch.exp(torch.neg(x**2))
+        self.act_func=parse_activation(activation)
+        self.last_act_func_name=last_activation
+        self.last_act_func=parse_activation(last_activation)
 
         self.loss_mae = nn.L1Loss() #MAE
         self.loss_mse = nn.MSELoss() #MSE
@@ -169,8 +180,10 @@ class Net(nn.Module):
             if(self.use_dropout):
                 x=self.dropouts[i](x)
             x=self.layers[i](x)
-            if(i<len(self.layers)-1):
+            if(i<len(self.layers)-2):
                 x=self.act_func(x)
+            elif(i==len(self.layers)-2):
+                x=self.last_act_func(x)
         if(self.shiftY):
             if(type(self.shiftY) is tuple):
                 x*=self.shiftY[0] # range
@@ -322,7 +335,7 @@ class Net(nn.Module):
                 P_d_Val, Y_d_Val, np_P_d_Val, np_Y_d_Val = self.get_predictions_from_batches(self.test_generator, with_np=True)
 
                 #calculate metrics
-                Val_loss=self.loss_fn(Y_d_Val, P_d_Val).detach().tolist()
+                Val_loss=self.loss_fn(P_d_Val, Y_d_Val).detach().tolist()
                 Val_RMSD=torch.sqrt(self.loss_mse(Y_d_Val, P_d_Val)).detach().tolist()
                 Val_Cor =np.corrcoef(np_Y_d_Val, np_P_d_Val)[0,1]
 
