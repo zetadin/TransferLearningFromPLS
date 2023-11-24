@@ -76,6 +76,7 @@ class Net(nn.Module):
     def __init__(self, inp_width, hl_w=15, nhl=2, learning_rate=1e-3,
                  activation="relu", last_activation="relu",
                  drop_p=np.array([0,0]), #regmet=Reg_method.no,
+                 use_batchnorms=False,
                  lr_decay=0, weights_distrib_func=None,
                  high_binder_cutoff=0, weight_decay=0, noise=0,
                  shiftY=False, cap_output=None):
@@ -84,7 +85,9 @@ class Net(nn.Module):
         self.nhl=nhl
         self.hl_w=hl_w
         self.layers=[]
+        self.use_batchnorms=use_batchnorms
         self.dropouts=[]
+        self.batchnorms=[]
         #self.regmet=regmet
         self.init_lr=learning_rate
         self.lr_decay=lr_decay
@@ -140,15 +143,21 @@ class Net(nn.Module):
         else:
             if(self.use_dropout):
                 self.dropouts.append(nn.Dropout(p=self.drop_p[0])) #input dropout
+            if(self.use_batchnorms):
+                self.batchnorms.append(nn.BatchNorm1d(self.inp_width))
             self.layers.append(nn.Linear(self.inp_width, self.hl_w))
             for i in range(self.nhl):
                 if(i<self.nhl-1):
                     if(self.use_dropout):
                         self.dropouts.append(nn.Dropout(p=self.drop_p[1])) #dropout between layers
+                    if(self.use_batchnorms):
+                        self.batchnorms.append(nn.BatchNorm1d(self.hl_w))
                     self.layers.append(nn.Linear(self.hl_w, self.hl_w))
                 else:
                     if(self.use_dropout):
                         self.dropouts.append(nn.Dropout(p=self.drop_p[1])) #dropout between layers
+                    if(self.use_batchnorms):
+                        self.batchnorms.append(nn.BatchNorm1d(self.hl_w))
                     self.layers.append(nn.Linear(self.hl_w, 1))
                     
         for i in range(len(self.layers)):
@@ -179,6 +188,8 @@ class Net(nn.Module):
         for i in range(len(self.layers)):
             if(self.use_dropout):
                 x=self.dropouts[i](x)
+            if(self.use_batchnorms):
+                x=self.batchnorms[i](x)
             x=self.layers[i](x)
             if(i<len(self.layers)-2):
                 x=self.act_func(x)
